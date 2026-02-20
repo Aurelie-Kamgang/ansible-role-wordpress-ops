@@ -1,0 +1,103 @@
+---
+# ============================================================
+# Routine : Désinstallation d'un plugin
+# Tag     : uninstall_plugin
+# Requiert: plugin_name  (slug WP-CLI obligatoire)
+#
+# Comportement :
+#   - Désactive le plugin s'il est actif (avant suppression)
+#   - Supprime complètement le plugin du filesystem
+#   - Idempotent : si le plugin n'existe pas, skip proprement
+# ============================================================
+
+- name: "Uninstall Plugin | Vérifier que plugin_name est défini"
+  ansible.builtin.assert:
+    that:
+      - plugin_name | length > 0
+    fail_msg: >
+      La variable 'plugin_name' est obligatoire.
+      Passez-la via : -e "plugin_name=woocommerce"
+  tags: uninstall_plugin
+
+# ── Vérifier si le plugin est installé ───────────────────────
+
+- name: "Uninstall Plugin | Vérifier si '{{ plugin_name }}' est installé"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: "wp plugin is-installed {{ plugin_name }} --allow-root"
+  register: _is_installed
+  failed_when: _is_installed.rc not in [0, 1]
+  tags: uninstall_plugin
+
+- name: "Uninstall Plugin | Plugin non trouvé – rien à faire"
+  ansible.builtin.debug:
+    msg: "Le plugin '{{ plugin_name }}' n'est pas installé. Rien à faire."
+  when: _is_installed.rc != 0
+  tags: uninstall_plugin
+
+# ── Récupérer le statut actuel ───────────────────────────────
+
+- name: "Uninstall Plugin | Lire le statut actuel (actif ou inactif)"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: "wp plugin get {{ plugin_name }} --field=status --allow-root"
+  register: _plugin_status
+  when: _is_installed.rc == 0
+  tags: uninstall_plugin
+
+- name: "Uninstall Plugin | Afficher le statut avant suppression"
+  ansible.builtin.debug:
+    msg: "Plugin '{{ plugin_name }}' – statut actuel : {{ _plugin_status.stdout | trim }}"
+  when: _is_installed.rc == 0
+  tags: uninstall_plugin
+
+# ── Désactiver avant suppression si actif ────────────────────
+
+- name: "Uninstall Plugin | Désactiver '{{ plugin_name }}' avant suppression"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: "wp plugin deactivate {{ plugin_name }} --allow-root"
+  when:
+    - _is_installed.rc == 0
+    - _plugin_status.stdout | trim == "active"
+  tags: uninstall_plugin
+
+# ── Suppression ──────────────────────────────────────────────
+
+- name: "Uninstall Plugin | Supprimer '{{ plugin_name }}'"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: "wp plugin delete {{ plugin_name }} --allow-root"
+  register: _delete_result
+  when: _is_installed.rc == 0
+  tags: uninstall_plugin
+
+- name: "Uninstall Plugin | Afficher le résultat"
+  ansible.builtin.debug:
+    msg: "{{ _delete_result.stdout_lines }}"
+  when:
+    - _is_installed.rc == 0
+    - _delete_result.stdout_lines is defined
+  tags: uninstall_plugin
+
+# ── Vérification post-suppression ────────────────────────────
+
+- name: "Uninstall Plugin | Confirmer la suppression"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: "wp plugin is-installed {{ plugin_name }} --allow-root"
+  register: _confirm_deleted
+  failed_when: _confirm_deleted.rc not in [0, 1]
+  when: _is_installed.rc == 0
+  tags: uninstall_plugin
+
+- name: "Uninstall Plugin | Résumé"
+  ansible.builtin.debug:
+    msg: >
+      {% if _confirm_deleted.rc != 0 %}
+      Plugin '{{ plugin_name }}' supprimé avec succès.
+      {% else %}
+      ATTENTION : le plugin '{{ plugin_name }}' est encore présent.
+      {% endif %}
+  when: _is_installed.rc == 0
+  tags: uninstall_plugin

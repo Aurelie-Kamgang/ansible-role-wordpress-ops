@@ -11,6 +11,7 @@
 #   ansible-playbook site.yml --tags restore_db   -e "restore_db_file=..."
 #   ansible-playbook site.yml --tags restore_files -e "restore_db_file=... restore_files_archive=..."
 #   ansible-playbook site.yml --tags update_plugins
+#   ansible-playbook site.yml --tags install_plugin -e "plugin_install_name=woocommerce plugin_install_version=8.5.2"
 #   ansible-playbook site.yml --tags manage_plugin  -e "plugin_name=... plugin_action=activate"
 #   ansible-playbook site.yml --tags cleanup
 # ============================================================
@@ -31,9 +32,17 @@
   ansible.builtin.include_tasks: restore_files.yml
   tags: [restore_files, never]
 
-- name: "Include | Plugins – mise à jour de tous les plugins"
+- name: "Include | Plugins – mise à jour ciblée par version"
   ansible.builtin.include_tasks: update_plugins.yml
   tags: [update_plugins, never]
+
+- name: "Include | Plugins – installation sans activation"
+  ansible.builtin.include_tasks: install_plugin.yml
+  tags: [install_plugin, never]
+
+- name: "Include | Plugins – désinstallation"
+  ansible.builtin.include_tasks: uninstall_plugin.yml
+  tags: [uninstall_plugin, never]
 
 - name: "Include | Plugins – activation / désactivation"
   ansible.builtin.include_tasks: manage_plugin.yml

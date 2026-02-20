@@ -29,8 +29,26 @@ restore_db_file: ""          # chemin absolu vers le .sql à restaurer
 restore_files_archive: ""    # chemin absolu vers le .tar.gz à restaurer
 
 # ── Gestion des plugins ─────────────────────────────────────
+
+# manage_plugin : activer ou désactiver
 plugin_name: ""              # slug WP-CLI du plugin
 plugin_action: "activate"    # activate | deactivate
+
+# install_plugin : installer sans activer
+plugin_install_name: ""      # slug WP-CLI du plugin à installer
+plugin_install_version: ""   # version précise (ex: 3.2.1) – vide = dernière version
+
+# update_plugins : liste ciblée de plugins avec version souhaitée
+# Surcharger dans group_vars/wordpress_servers.yml ou via -e
+# Exemple :
+#   plugins_to_update:
+#     - name: woocommerce
+#       version: "8.5.2"
+#     - name: yoast-seo
+#       version: "22.1"
+#     - name: contact-form-7
+#       version: "5.9.3"
+plugins_to_update: []
 
 # ── Amazon S3 ───────────────────────────────────────────────
 s3_enabled: false                        # mettre à true pour activer l'upload
@@ -46,3 +64,4 @@ aws_secret_key: ""  # laisser vide si IAM role EC2 / instance profile
 
 # ── Timestamp partagé (calculé une seule fois par run) ──────
 backup_timestamp: "{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}{{ ansible_date_time.second }}"
+

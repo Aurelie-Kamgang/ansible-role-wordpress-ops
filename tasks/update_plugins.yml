@@ -1,34 +1,114 @@
 ---
 # ============================================================
-# Routine : Mise à jour de tous les plugins WordPress
+# Routine : Mise à jour ciblée de plugins avec version précise
 # Tag     : update_plugins
+# Requiert: plugins_to_update (liste définie dans group_vars
+#           ou passée via -e)
+#
+# Format de la liste :
+#   plugins_to_update:
+#     - name: woocommerce
+#       version: "8.5.2"
+#     - name: yoast-seo
+#       version: "22.1"
+#     - name: contact-form-7
+#       version: "5.9.3"
 # ============================================================
 
-- name: "Update Plugins | Lister les mises à jour disponibles"
+- name: "Update Plugins | Vérifier que la liste n'est pas vide"
+  ansible.builtin.assert:
+    that:
+      - plugins_to_update | length > 0
+    fail_msg: >
+      La variable 'plugins_to_update' est vide.
+      Définissez la liste dans group_vars ou passez-la via :
+      -e '{"plugins_to_update":[{"name":"woocommerce","version":"8.5.2"}]}'
+  tags: update_plugins
+
+- name: "Update Plugins | Afficher le plan de mise à jour"
+  ansible.builtin.debug:
+    msg: "Plugins à mettre à jour : {{ plugins_to_update | map(attribute='name') | zip(plugins_to_update | map(attribute='version')) | list }}"
+  tags: update_plugins
+
+# ── Vérification pré-update : plugin installé ? ──────────────
+
+- name: "Update Plugins | Vérifier que chaque plugin est installé"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: "wp plugin is-installed {{ item.name }} --allow-root"
+  loop: "{{ plugins_to_update }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _plugin_check
+  failed_when: _plugin_check.rc not in [0, 1]
+  tags: update_plugins
+
+- name: "Update Plugins | Signaler les plugins non installés"
+  ansible.builtin.debug:
+    msg: "ATTENTION : plugin '{{ item.item.name }}' non installé, ignoré."
+  loop: "{{ _plugin_check.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: item.rc != 0
+  tags: update_plugins
+
+# ── Version courante avant mise à jour ───────────────────────
+
+- name: "Update Plugins | Lire la version courante (avant MAJ)"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: "wp plugin get {{ item.item.name }} --field=version --allow-root"
+  loop: "{{ _plugin_check.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  register: _versions_before
+  when: item.rc == 0
+  tags: update_plugins
+
+- name: "Update Plugins | Afficher les versions avant MAJ"
+  ansible.builtin.debug:
+    msg: "{{ item.item.item.name }} : version actuelle → {{ item.stdout | trim }}"
+  loop: "{{ _versions_before.results }}"
+  loop_control:
+    label: "{{ item.item.item.name }}"
+  when: item.stdout is defined
+  tags: update_plugins
+
+# ── Mise à jour vers la version ciblée ───────────────────────
+
+- name: "Update Plugins | Mettre à jour vers la version ciblée"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: "wp plugin update {{ item.item.name }} --version={{ item.item.version }} --allow-root"
+  loop: "{{ _plugin_check.results }}"
+  loop_control:
+    label: "{{ item.item.name }} → v{{ item.item.version }}"
+  register: _update_results
+  when: item.rc == 0
+  tags: update_plugins
+
+# ── Vérification post-update ─────────────────────────────────
+
+- name: "Update Plugins | Vérifier la version après mise à jour"
   community.docker.docker_container_exec:
     container: "{{ wordpress_container }}"
     command: >
-      wp plugin list
-      --update=available
-      --fields=name,version,update_version
+      wp plugin get {{ item.item.name }}
+      --fields=name,status,version
       --format=table
       --allow-root
-  register: _plugins_available
+  loop: "{{ _plugin_check.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  register: _versions_after
+  when: item.rc == 0
   tags: update_plugins
 
-- name: "Update Plugins | Afficher les plugins à mettre à jour"
+- name: "Update Plugins | Résumé final"
   ansible.builtin.debug:
-    msg: "{{ _plugins_available.stdout_lines }}"
-  tags: update_plugins
-
-- name: "Update Plugins | Mettre à jour tous les plugins"
-  community.docker.docker_container_exec:
-    container: "{{ wordpress_container }}"
-    command: "wp plugin update --all --allow-root"
-  register: _update_result
-  tags: update_plugins
-
-- name: "Update Plugins | Afficher le résultat"
-  ansible.builtin.debug:
-    msg: "{{ _update_result.stdout_lines }}"
+    msg: "{{ item.stdout_lines }}"
+  loop: "{{ _versions_after.results }}"
+  loop_control:
+    label: "{{ item.item.item.name }}"
+  when: item.stdout_lines is defined
   tags: update_plugins
