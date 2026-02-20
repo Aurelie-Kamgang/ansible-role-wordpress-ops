@@ -1,0 +1,67 @@
+---
+# ============================================================
+# Routine : Backup – base de données
+# Tag     : backup_db
+# S3      : upload automatique si s3_enabled: true
+# ============================================================
+
+- name: "Backup DB | Créer le répertoire de backup"
+  ansible.builtin.file:
+    path: "{{ backup_db_dir }}"
+    state: directory
+    mode: "0750"
+  tags: backup_db
+
+- name: "Backup DB | Exécuter mysqldump dans le container"
+  community.docker.docker_container_exec:
+    container: "{{ mysql_container }}"
+    command: >
+      mysqldump
+      -u root
+      -p{{ db_root_password }}
+      --single-transaction
+      --routines
+      --triggers
+      {{ db_name }}
+  register: _db_dump
+  tags: backup_db
+
+- name: "Backup DB | Écrire le dump sur le host"
+  ansible.builtin.copy:
+    content: "{{ _db_dump.stdout }}"
+    dest: "{{ backup_db_full_path }}"
+    mode: "0640"
+  tags: backup_db
+
+- name: "Backup DB | Vérifier la taille du dump"
+  ansible.builtin.stat:
+    path: "{{ backup_db_full_path }}"
+  register: _db_stat
+  tags: backup_db
+
+- name: "Backup DB | Afficher le résultat local"
+  ansible.builtin.debug:
+    msg: >
+      Backup DB → {{ backup_db_full_path }}
+      ({{ _db_stat.stat.size | filesizeformat }})
+  tags: backup_db
+
+# ── Upload S3 ────────────────────────────────────────────────
+
+- name: "Backup DB | Upload vers S3"
+  amazon.aws.s3_object:
+    bucket: "{{ s3_bucket }}"
+    object: "{{ s3_db_key }}"
+    src: "{{ backup_db_full_path }}"
+    mode: put
+    region: "{{ s3_region }}"
+    access_key: "{{ aws_access_key | default(omit) }}"
+    secret_key: "{{ aws_secret_key | default(omit) }}"
+  when: s3_enabled | bool
+  tags: backup_db
+
+- name: "Backup DB | Confirmer l'upload S3"
+  ansible.builtin.debug:
+    msg: "Backup DB uploadé → s3://{{ s3_bucket }}/{{ s3_db_key }}"
+  when: s3_enabled | bool
+  tags: backup_db

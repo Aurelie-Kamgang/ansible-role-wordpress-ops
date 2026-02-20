@@ -1,0 +1,17 @@
+---
+# ============================================================
+# Test playbook – used by CI / pre-commit
+# ============================================================
+- name: "Test | wordpress_ops role"
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    wordpress_container: "wordpress_test"
+    mysql_container: "db_test"
+    backup_base_dir: "/tmp/test_backups"
+    backup_retention_days: 1
+
+  roles:
+    - role: wordpress_ops

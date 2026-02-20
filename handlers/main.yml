@@ -1,0 +1,76 @@
+---
+# ============================================================
+# Handlers – orchestration des dépendances entre routines
+# ============================================================
+# Les handlers s'exécutent UNE SEULE FOIS après notification,
+# ou immédiatement si flush_handlers est appelé.
+#
+# Flux implémentés :
+#   backup_files   --notify--> "backup database before files"
+#   restore_files  --notify--> "restore database before files"
+# ============================================================
+
+# ── Handler : backup DB en amont d'un backup fichiers ───────
+
+- name: backup database before files
+  community.docker.docker_container_exec:
+    container: "{{ mysql_container }}"
+    command: >
+      mysqldump
+      -u root
+      -p{{ db_root_password }}
+      --single-transaction
+      --routines
+      --triggers
+      {{ db_name }}
+  register: _db_dump_handler
+
+- name: write database dump triggered by handler
+  ansible.builtin.copy:
+    content: "{{ _db_dump_handler.stdout }}"
+    dest: "{{ backup_db_full_path }}"
+    mode: "0640"
+  listen: "backup database before files"
+
+- name: upload database dump to S3 (handler)
+  amazon.aws.s3_object:
+    bucket: "{{ s3_bucket }}"
+    object: "{{ s3_db_key }}"
+    src: "{{ backup_db_full_path }}"
+    mode: put
+    region: "{{ s3_region }}"
+    access_key: "{{ aws_access_key | default(omit) }}"
+    secret_key: "{{ aws_secret_key | default(omit) }}"
+  when: s3_enabled | bool
+  listen: "backup database before files"
+
+# ── Handler : restore DB en amont d'une restauration fichiers ─
+
+- name: copy restore dump into mysql container (handler)
+  ansible.builtin.command:
+    cmd: "docker cp {{ restore_db_file }} {{ mysql_container }}:/tmp/restore_handler.sql"
+  changed_when: true
+  listen: "restore database before files"
+
+- name: drop and recreate database (handler)
+  community.docker.docker_container_exec:
+    container: "{{ mysql_container }}"
+    command: >
+      mysql -u root -p{{ db_root_password }}
+      -e "DROP DATABASE IF EXISTS {{ db_name }};
+          CREATE DATABASE {{ db_name }}
+          CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+  listen: "restore database before files"
+
+- name: import dump into database (handler)
+  community.docker.docker_container_exec:
+    container: "{{ mysql_container }}"
+    command: >
+      bash -c "mysql -u root -p{{ db_root_password }} {{ db_name }} < /tmp/restore_handler.sql"
+  listen: "restore database before files"
+
+- name: cleanup temp dump in mysql container (handler)
+  community.docker.docker_container_exec:
+    container: "{{ mysql_container }}"
+    command: "rm -f /tmp/restore_handler.sql"
+  listen: "restore database before files"

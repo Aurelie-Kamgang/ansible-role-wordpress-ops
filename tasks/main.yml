@@ -1,0 +1,44 @@
+---
+# ============================================================
+# Entry point – wordpress_ops role
+# ============================================================
+# Chaque routine est isolée dans son propre fichier de tâches.
+# Le tag "never" empêche toute exécution accidentelle sans tag.
+#
+# Commandes :
+#   ansible-playbook site.yml --tags backup_db
+#   ansible-playbook site.yml --tags backup_files
+#   ansible-playbook site.yml --tags restore_db   -e "restore_db_file=..."
+#   ansible-playbook site.yml --tags restore_files -e "restore_db_file=... restore_files_archive=..."
+#   ansible-playbook site.yml --tags update_plugins
+#   ansible-playbook site.yml --tags manage_plugin  -e "plugin_name=... plugin_action=activate"
+#   ansible-playbook site.yml --tags cleanup
+# ============================================================
+
+- name: "Include | Backup – base de données"
+  ansible.builtin.include_tasks: backup_db.yml
+  tags: [backup_db, never]
+
+- name: "Include | Backup – fichiers du site"
+  ansible.builtin.include_tasks: backup_files.yml
+  tags: [backup_files, never]
+
+- name: "Include | Restauration – base de données"
+  ansible.builtin.include_tasks: restore_db.yml
+  tags: [restore_db, never]
+
+- name: "Include | Restauration – fichiers du site"
+  ansible.builtin.include_tasks: restore_files.yml
+  tags: [restore_files, never]
+
+- name: "Include | Plugins – mise à jour de tous les plugins"
+  ansible.builtin.include_tasks: update_plugins.yml
+  tags: [update_plugins, never]
+
+- name: "Include | Plugins – activation / désactivation"
+  ansible.builtin.include_tasks: manage_plugin.yml
+  tags: [manage_plugin, never]
+
+- name: "Include | Nettoyage – anciens backups"
+  ansible.builtin.include_tasks: cleanup.yml
+  tags: [cleanup, never]

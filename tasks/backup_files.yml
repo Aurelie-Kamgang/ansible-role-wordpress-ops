@@ -1,0 +1,99 @@
+---
+# ============================================================
+# Routine : Backup – fichiers du site WordPress
+# Tag     : backup_files
+# Handler : "backup database before files"
+#           → le dump DB est créé EN AMONT de l'archive fichiers
+#           → garantit la cohérence DB + fichiers
+# S3      : upload automatique si s3_enabled: true
+# ============================================================
+
+- name: "Backup Files | Créer le répertoire de backup"
+  ansible.builtin.file:
+    path: "{{ backup_files_dir }}"
+    state: directory
+    mode: "0750"
+  tags: backup_files
+
+- name: "Backup Files | Déclencher le backup DB d'abord (handler)"
+  ansible.builtin.debug:
+    msg: "Notification du handler : backup database before files"
+  notify: "backup database before files"
+  changed_when: true
+  tags: backup_files
+
+- name: "Backup Files | Forcer l'exécution du handler DB maintenant"
+  ansible.builtin.meta: flush_handlers
+  tags: backup_files
+
+# ── Archive des fichiers WordPress ───────────────────────────
+
+- name: "Backup Files | Créer l'archive tar.gz dans le container"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: >
+      tar -czf /tmp/{{ backup_files_filename }}
+      -C /
+      {{ wordpress_root | regex_replace('^/', '') }}
+  tags: backup_files
+
+- name: "Backup Files | Copier l'archive du container vers le host"
+  ansible.builtin.command:
+    cmd: >
+      docker cp
+      {{ wordpress_container }}:/tmp/{{ backup_files_filename }}
+      {{ backup_files_full_path }}
+  changed_when: true
+  tags: backup_files
+
+- name: "Backup Files | Supprimer l'archive temporaire dans le container"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: "rm -f /tmp/{{ backup_files_filename }}"
+  tags: backup_files
+
+- name: "Backup Files | Vérifier la taille de l'archive"
+  ansible.builtin.stat:
+    path: "{{ backup_files_full_path }}"
+  register: _files_stat
+  tags: backup_files
+
+- name: "Backup Files | Afficher le résultat local"
+  ansible.builtin.debug:
+    msg: >
+      Backup fichiers → {{ backup_files_full_path }}
+      ({{ _files_stat.stat.size | filesizeformat }})
+  tags: backup_files
+
+# ── Upload S3 ────────────────────────────────────────────────
+
+- name: "Backup Files | Upload fichiers vers S3"
+  amazon.aws.s3_object:
+    bucket: "{{ s3_bucket }}"
+    object: "{{ s3_files_key }}"
+    src: "{{ backup_files_full_path }}"
+    mode: put
+    region: "{{ s3_region }}"
+    access_key: "{{ aws_access_key | default(omit) }}"
+    secret_key: "{{ aws_secret_key | default(omit) }}"
+  when: s3_enabled | bool
+  tags: backup_files
+
+- name: "Backup Files | Confirmer l'upload S3 fichiers"
+  ansible.builtin.debug:
+    msg: "Backup fichiers uploadé → s3://{{ s3_bucket }}/{{ s3_files_key }}"
+  when: s3_enabled | bool
+  tags: backup_files
+
+# ── Résumé complet ───────────────────────────────────────────
+
+- name: "Backup Files | Résumé du backup complet"
+  ansible.builtin.debug:
+    msg:
+      - "=== Backup complet terminé ==="
+      - "DB     : {{ backup_db_full_path }}"
+      - "Files  : {{ backup_files_full_path }}"
+      - "S3 DB  : s3://{{ s3_bucket }}/{{ s3_db_key }}"
+      - "S3 Files: s3://{{ s3_bucket }}/{{ s3_files_key }}"
+  when: s3_enabled | bool
+  tags: backup_files

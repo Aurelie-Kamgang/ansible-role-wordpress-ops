@@ -1,0 +1,15 @@
+---
+# ============================================================
+# Variables dérivées – non destinées à être surchargées
+# ============================================================
+
+backup_db_filename: "db_{{ backup_timestamp }}.sql"
+backup_files_filename: "files_{{ backup_timestamp }}.tar.gz"
+
+# Chemins complets sur le host
+backup_db_full_path: "{{ backup_db_dir }}/{{ backup_db_filename }}"
+backup_files_full_path: "{{ backup_files_dir }}/{{ backup_files_filename }}"
+
+# Clés S3 (chemin dans le bucket)
+s3_db_key: "{{ s3_db_prefix }}/{{ backup_db_filename }}"
+s3_files_key: "{{ s3_files_prefix }}/{{ backup_files_filename }}"

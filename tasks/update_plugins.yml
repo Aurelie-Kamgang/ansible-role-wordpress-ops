@@ -1,0 +1,34 @@
+---
+# ============================================================
+# Routine : Mise à jour de tous les plugins WordPress
+# Tag     : update_plugins
+# ============================================================
+
+- name: "Update Plugins | Lister les mises à jour disponibles"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: >
+      wp plugin list
+      --update=available
+      --fields=name,version,update_version
+      --format=table
+      --allow-root
+  register: _plugins_available
+  tags: update_plugins
+
+- name: "Update Plugins | Afficher les plugins à mettre à jour"
+  ansible.builtin.debug:
+    msg: "{{ _plugins_available.stdout_lines }}"
+  tags: update_plugins
+
+- name: "Update Plugins | Mettre à jour tous les plugins"
+  community.docker.docker_container_exec:
+    container: "{{ wordpress_container }}"
+    command: "wp plugin update --all --allow-root"
+  register: _update_result
+  tags: update_plugins
+
+- name: "Update Plugins | Afficher le résultat"
+  ansible.builtin.debug:
+    msg: "{{ _update_result.stdout_lines }}"
+  tags: update_plugins

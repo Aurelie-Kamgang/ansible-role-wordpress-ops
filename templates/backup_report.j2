@@ -1,0 +1,15 @@
+# ============================================================
+# Backup Report – {{ ansible_date_time.date }}
+# Host        : {{ inventory_hostname }}
+# ============================================================
+
+## Database Backup
+- File  : {{ backup_db_dir }}/{{ backup_db_filename }}
+- Date  : {{ ansible_date_time.iso8601 }}
+
+## Files Backup
+- File  : {{ backup_files_dir }}/{{ backup_files_filename }}
+- Date  : {{ ansible_date_time.iso8601 }}
+
+## Retention Policy
+- Keep backups for : {{ backup_retention_days }} days

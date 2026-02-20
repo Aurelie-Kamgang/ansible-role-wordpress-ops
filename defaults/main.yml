@@ -1,0 +1,48 @@
+---
+# ============================================================
+# Defaults – Role : wordpress_ops
+# Toutes ces variables peuvent être surchargées dans :
+#   - inventory/group_vars/wordpress_servers.yml
+#   - inventory/host_vars/<hostname>.yml
+#   - avec -e "var=value" en ligne de commande
+# ============================================================
+
+# ── Docker ──────────────────────────────────────────────────
+wordpress_container: "wordpress"
+mysql_container: "db"
+wordpress_root: "/var/www/html"
+
+# ── Backup local ────────────────────────────────────────────
+backup_base_dir: "/opt/backups/wordpress"
+backup_db_dir: "{{ backup_base_dir }}/database"
+backup_files_dir: "{{ backup_base_dir }}/files"
+backup_retention_days: 7
+
+# ── Base de données ─────────────────────────────────────────
+db_name: "wordpress"
+db_user: "wordpress"
+db_password: "wordpress"           # à mettre dans un vault en production
+db_root_password: "rootpassword"   # à mettre dans un vault en production
+
+# ── Restauration (passer via -e au runtime) ─────────────────
+restore_db_file: ""          # chemin absolu vers le .sql à restaurer
+restore_files_archive: ""    # chemin absolu vers le .tar.gz à restaurer
+
+# ── Gestion des plugins ─────────────────────────────────────
+plugin_name: ""              # slug WP-CLI du plugin
+plugin_action: "activate"    # activate | deactivate
+
+# ── Amazon S3 ───────────────────────────────────────────────
+s3_enabled: false                        # mettre à true pour activer l'upload
+s3_bucket: "mon-bucket-wordpress-backup" # nom du bucket S3
+s3_region: "eu-west-1"                   # région AWS
+s3_prefix: "wordpress"                   # préfixe clé dans le bucket
+s3_db_prefix: "{{ s3_prefix }}/database"
+s3_files_prefix: "{{ s3_prefix }}/files"
+# Credentials AWS – préférer IAM role sur l'instance (pas de clé en clair)
+# Si pas d'IAM role, surcharger dans vault :
+aws_access_key: ""  # laisser vide si IAM role EC2 / instance profile
+aws_secret_key: ""  # laisser vide si IAM role EC2 / instance profile
+
+# ── Timestamp partagé (calculé une seule fois par run) ──────
+backup_timestamp: "{{ ansible_date_time.date }}_{{ ansible_date_time.hour }}{{ ansible_date_time.minute }}{{ ansible_date_time.second }}"
