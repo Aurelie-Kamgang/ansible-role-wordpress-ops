@@ -28,7 +28,7 @@
 - name: "Converge | Phase 2 - Restauration"
   hosts: molecule_hosts
   gather_facts: true
-
+    role_under_test: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   pre_tasks:
     - name: "Trouver les backups créés"
       ansible.builtin.find:
@@ -103,7 +103,7 @@
       when: _local_files_path | default("") | length > 0
       block:
         - ansible.builtin.include_role:
-            name: wordpress_ops
+            name: "{{ role_under_test }}"
             tasks_from: restore_files.yml
           vars:
             restore_db_file: "{{ _local_db_path }}"
@@ -136,5 +136,5 @@
 
     - name: "Cleanup"
       ansible.builtin.include_role:
-        name: wordpress_ops
+        name: "{{ role_under_test }}"
         tasks_from: cleanup.yml
