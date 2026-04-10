@@ -28,6 +28,7 @@
 - name: "Converge | Phase 2 - Restauration"
   hosts: molecule_hosts
   gather_facts: true
+  vars:
     role_under_test: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   pre_tasks:
     - name: "Trouver les backups créés"
