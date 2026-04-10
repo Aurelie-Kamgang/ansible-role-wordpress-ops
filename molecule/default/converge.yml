@@ -10,10 +10,11 @@
   vars:
     restore_db_file: ""
     restore_files_archive: ""
+    role_under_test: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}"
   tasks:
     - name: "Créer les backups"
       ansible.builtin.include_role:
-        name: wordpress_ops
+        name: "{{ role_under_test }}"
         tasks_from: "{{ item }}"
       loop:
         - backup_db.yml

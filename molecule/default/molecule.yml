@@ -28,7 +28,7 @@ provisioner:
       remote_tmp: /tmp/.ansible/tmp
       control_path: /tmp/ansible-ssh-%%h-%%p-%%r
       pipelining: true
-      roles_path: /home/ubuntu/molecule-wordpress/roles 
+      #roles_path: /home/ubuntu/molecule-wordpress/roles 
   inventory:
     group_vars:
       molecule_hosts:
