@@ -29,7 +29,6 @@ jobs:
 
       - name: Lancer les tests Molecule
         run: |
-          cd roles/wordpress_ops
           molecule test
         env:
           PY_COLORS: "1"
