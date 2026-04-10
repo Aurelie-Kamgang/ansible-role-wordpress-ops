@@ -92,7 +92,7 @@
   tasks:
     - name: "Restaurer la DB"
       ansible.builtin.include_role:
-        name: wordpress_ops
+        name: "{{ role_under_test }}"
         tasks_from: restore_db.yml
       vars:
         restore_db_file: "{{ _local_db_path }}"
